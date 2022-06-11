@@ -1,0 +1,149 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <semaphore.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <errno.h>
+#define SHMSIZ 1024
+
+int main(void)
+{
+	// **
+	// Variables declaration
+	// **
+
+	key_t key;
+	int shmid;
+	int infinite_loop = 1;
+	char *shm, *s, c;
+	char *user_input = malloc(sizeof(char)*BUFSIZ);
+	
+	sem_t *sem;
+	// **
+	// Setup of shared memory
+	// **
+
+	// The key of the shared memory segment will be the user ID
+	key = getuid();
+
+	// The shared memory segment is created
+	shmid = shmget(key, SHMSIZ, IPC_CREAT | 0666);
+
+	// Error is raised if segment isn't created
+	if (shmid < 0) {
+		perror("shmget failed: shared memory segment wasn't created");
+		exit(EXIT_FAILURE);
+	}
+	
+	// Shared memory segment is attached to data space
+	shm = shmat(shmid, NULL, 0);
+
+	// Error is raised if segment isn't attached
+	if (shm == (char *) -1) {
+		perror("shmat failed: segment wasn't attached to data space");
+		exit(EXIT_FAILURE);
+	}
+	sem = sem_open("pSem",O_CREAT | O_EXCL, 0644, 1); 
+	//
+	sem_unlink("pSem");
+	// **
+	// User enters input in an infinite loop
+	// **
+	pid_t pid;
+	int child;
+	printf("Enter number of users\n");
+	scanf("%d",&child);
+	for (int i=0;i<child;i++)
+	{
+		pid = fork();
+		if (pid<0){
+		perror("Error in making child");
+		exit(1);		
+		}
+		if (pid==0)
+		{
+			break;
+		}
+	}
+	if (pid!=0)	//parent
+	{
+		
+		while (pid = waitpid (-1, NULL, 0)){
+            if (errno == ECHILD)
+                break;
+        }
+		if (shmdt(shm) == -1) {
+		perror("shmdt failed: segment wasn't dettached from data space");
+		exit(1);
+		}
+		if (shmctl(shmid, IPC_RMID, 0) == -1) {
+		perror("shmctl failed: ipc didn't close");
+		exit(1);
+		}
+		printf("sem_destroy return value:%d\n",sem_destroy (sem));
+	}
+		
+	else
+	{
+		//sem_wait(lock);
+                printf("ENTER DATA");
+		while (infinite_loop) {
+		sem_wait(sem);
+		sleep(1);
+		// User is asked for an alpha numeric string input
+		
+		fgets(user_input, BUFSIZ, stdin);
+
+		// If the input string is "quit" the infinite loop is interrupted, so that the shared memory segment can be dettached and the IPC can be closed
+		if (strncmp(user_input, "quit", 4) == 0) {
+			infinite_loop = 0;
+			sem_post(sem);
+			//sem_post(lock);
+			break;
+		}
+
+		// User input is copied to shared memory
+		memcpy(shm, user_input, strlen(user_input));
+
+		// A dollar sign '$' is added to the end of the input string, so that processor.c knows when the input ends ($ is not alpha numeric, so it won't harm the program main functionality)
+		s = shm;
+		s += strlen(user_input);
+		*s = '$';
+
+		// Processor.c signalizes it has finished reading the input string by inserting an '@' symbol to the memory address shm is pointing to (the beginning of the shared memory string). So, here receiver.c is waiting for that signal so that it can restart the loop. ('@' is not alpha numeric, so it won't harm the program main functionality)
+		while (*shm != '@')
+			sleep(1);
+			sem_post(sem);
+		//sem_post(lock);
+		
+		//exit(0);
+	//sem_destroy(lock);	
+	}}
+char ch;
+	FILE* fp;
+	fp = fopen("digits.out","r");
+	if (fp==NULL)
+	{
+		printf("File not opened");
+		return -1;
+	}
+	else
+	{
+		printf("The contents in file are :");
+		while(ch!=EOF)
+		{
+			ch = fgetc(fp);
+			printf("%c",ch);	
+		}
+		fclose(fp);
+	}
+
+	//sem_unlink("psem");
+	
+}
